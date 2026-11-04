@@ -11,6 +11,7 @@ async function migrate() {
   const __dirname = dirname(fileURLToPath(import.meta.url))
   const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8')
 
+  console.log(`Connecting to ${env.db.user}@${env.db.host}:${env.db.port}/${env.db.name} ...`)
   const connection = await mysql.createConnection({
     host: env.db.host,
     port: env.db.port,
@@ -39,6 +40,9 @@ async function migrate() {
 }
 
 migrate().catch((err) => {
-  console.error('Failed to apply schema:', err.sqlMessage || err.message)
+  console.error('Failed to apply schema.')
+  console.error('code:', err.code)
+  console.error('errno:', err.errno)
+  console.error('message:', err.sqlMessage || err.message || String(err))
   process.exit(1)
 })
