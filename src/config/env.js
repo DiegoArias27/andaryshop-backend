@@ -11,6 +11,22 @@ function required(name, fallback) {
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
 const adminUrl = process.env.ADMIN_URL || 'http://localhost:5174'
 
+// Railway (and most hosts) offer the DB as one connection string instead of
+// separate host/user/password fields — DATABASE_URL, set to
+// `${{ MySQL.MYSQL_PRIVATE_URL }}` in the service's Variables tab, is
+// parsed here so deploys don't need five separate variables wired by hand.
+// Local dev keeps using the plain DB_HOST/DB_USER/etc. vars below.
+function dbConfigFromUrl(databaseUrl) {
+  const u = new URL(databaseUrl)
+  return {
+    host: u.hostname,
+    port: Number(u.port || 3306),
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+    name: u.pathname.replace(/^\//, ''),
+  }
+}
+
 export const env = {
   port: process.env.PORT || 4000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -22,13 +38,15 @@ export const env = {
     .map((v) => v.trim())
     .filter(Boolean),
 
-  db: {
-    host: required('DB_HOST', 'localhost'),
-    port: Number(process.env.DB_PORT || 3306),
-    user: required('DB_USER', 'root'),
-    password: process.env.DB_PASSWORD || '',
-    name: required('DB_NAME', 'andary_shop'),
-  },
+  db: process.env.DATABASE_URL
+    ? dbConfigFromUrl(process.env.DATABASE_URL)
+    : {
+        host: required('DB_HOST', 'localhost'),
+        port: Number(process.env.DB_PORT || 3306),
+        user: required('DB_USER', 'root'),
+        password: process.env.DB_PASSWORD || '',
+        name: required('DB_NAME', 'andary_shop'),
+      },
 
   jwt: {
     secret: required('JWT_SECRET'),
