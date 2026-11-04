@@ -12,7 +12,7 @@ function tryGetCustomerId(req) {
   const [scheme, token] = header.split(' ')
   if (scheme !== 'Bearer' || !token) return null
   try {
-    const payload = jwt.verify(token, env.jwt.secret)
+    const payload = jwt.verify(token, env.jwt.secret, { algorithms: ['HS256'] })
     return payload.type === 'customer' ? payload.sub : null
   } catch {
     return null

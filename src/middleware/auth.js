@@ -10,7 +10,10 @@ export function requireAdmin(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, env.jwt.secret)
+    // Pinned to HS256 — without this, jsonwebtoken trusts whatever
+    // algorithm the token's own header claims, which is how algorithm-
+    // confusion attacks forge a valid-looking signature.
+    const payload = jwt.verify(token, env.jwt.secret, { algorithms: ['HS256'] })
     if (payload.type !== 'admin') {
       return res.status(401).json({ error: 'Invalid or expired token' })
     }
@@ -30,7 +33,7 @@ export function requireCustomer(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, env.jwt.secret)
+    const payload = jwt.verify(token, env.jwt.secret, { algorithms: ['HS256'] })
     if (payload.type !== 'customer') {
       return res.status(401).json({ error: 'Invalid or expired token' })
     }

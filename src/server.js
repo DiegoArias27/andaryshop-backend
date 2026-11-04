@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import { env } from './config/env.js'
 import authRoutes from './routes/auth.routes.js'
 import customersRoutes from './routes/customers.routes.js'
@@ -25,6 +26,23 @@ import { startNotificationScheduler } from './jobs/notificationScheduler.js'
 
 const app = express()
 
+// Railway (and most hosts) put the app behind a reverse proxy — without
+// this, req.ip is the proxy's own address for every request, which breaks
+// express-rate-limit's per-IP keying below (everyone would share one
+// bucket) and any future IP-based logic. `1` trusts exactly one hop
+// (the platform's own edge), not an arbitrary chain an attacker could spoof.
+app.set('trust proxy', 1)
+
+app.use(
+  helmet({
+    // A pure JSON API with no HTML/inline scripts of its own — CSP has
+    // nothing to protect here, and cross-origin resource policy must stay
+    // open since the storefront and admin panel (different origins) both
+    // fetch() this API directly.
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+)
 app.use(
   cors({
     origin: (origin, callback) => {

@@ -12,12 +12,13 @@ import {
   cancelConfirmedOrder,
 } from '../controllers/orders.controller.js'
 import { requireAdmin } from '../middleware/auth.js'
+import { orderRateLimit } from '../middleware/rateLimit.js'
 
 const router = Router()
 
 // Public — hit right when a customer clicks "Enviar pedido por WhatsApp",
 // guest or logged in.
-router.post('/', createOrder)
+router.post('/', orderRateLimit, createOrder)
 
 router.post('/pos', requireAdmin, createPosSale)
 router.get('/', requireAdmin, listOrders)
