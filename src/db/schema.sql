@@ -632,6 +632,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
   CONSTRAINT chk_app_settings_singleton CHECK (id = 1)
 ) ENGINE=InnoDB;
 
+-- The table above has no row until one is explicitly inserted — without
+-- this, getSettings/updateSettings (settings.controller.js) find no row,
+-- res.json(undefined) sends an empty 200 body, and the admin's fetch client
+-- crashes trying to parse it as JSON ("Unexpected end of JSON input").
+-- INSERT IGNORE is safe to re-run: id's PRIMARY KEY makes every run after
+-- the first a no-op instead of an error.
+INSERT IGNORE INTO app_settings (id) VALUES (1);
+
 -- One row per browser/device that opted into push notifications from the
 -- admin (see admin/public/sw.js) — the raw subscription object the Push API
 -- hands back, needed as-is to send anything to it later via web-push.
