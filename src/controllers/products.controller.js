@@ -3,6 +3,26 @@ import { slugify } from '../utils/slugify.js'
 import { deleteR2ObjectByUrl } from '../utils/r2Cleanup.js'
 import { deriveThumbUrl } from '../utils/imageVariants.js'
 
+// The admin can legitimately want many products sharing the same display
+// name (e.g. the same shirt in several colors, kept as separate products
+// instead of variants) — slugify() alone would collide on products.slug's
+// UNIQUE constraint for the second one, rejecting it outright. This picks
+// "name", "name-2", "name-3", … instead, so the name itself never has to
+// change — the admin only ever sees/types the plain name; the disambiguating
+// suffix only ever shows up in the product's URL.
+async function uniqueProductSlug(baseSlug, excludeId = null) {
+  const params = excludeId ? [baseSlug, `${baseSlug}-%`, excludeId] : [baseSlug, `${baseSlug}-%`]
+  const [rows] = await pool.query(
+    `SELECT slug FROM products WHERE (slug = ? OR slug LIKE ?)${excludeId ? ' AND id != ?' : ''}`,
+    params
+  )
+  const taken = new Set(rows.map((r) => r.slug))
+  if (!taken.has(baseSlug)) return baseSlug
+  let n = 2
+  while (taken.has(`${baseSlug}-${n}`)) n++
+  return `${baseSlug}-${n}`
+}
+
 const BASE_SELECT = `
   SELECT p.*, c.name AS category_name, c.slug AS category_slug,
          b.name AS brand_name, b.slug AS brand_slug
@@ -189,7 +209,7 @@ export async function createProduct(req, res, next) {
       return res.status(400).json({ error: 'name and price are required' })
     }
 
-    const slug = slugify(name)
+    const slug = await uniqueProductSlug(slugify(name))
 
     const [result] = await pool.query(
       `INSERT INTO products (category_id, brand_id, name, slug, description, price, main_image_url, main_thumb_url, is_new, is_featured, discount_type, discount_value)
@@ -257,7 +277,7 @@ export async function updateProduct(req, res, next) {
 
     if (name !== undefined) {
       fields.push('name = ?', 'slug = ?')
-      params.push(name, slugify(name))
+      params.push(name, await uniqueProductSlug(slugify(name), id))
     }
     if (description !== undefined) { fields.push('description = ?'); params.push(description) }
     if (price !== undefined) { fields.push('price = ?'); params.push(price) }
