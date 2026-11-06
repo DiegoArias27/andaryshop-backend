@@ -317,6 +317,10 @@ CREATE TABLE IF NOT EXISTS collection_bundle_parts (
   -- part) instead of pooling every part toward the collection's single
   -- bundle_qty/bundle_price. NULL keeps the old flat pooled-price behavior.
   price DECIMAL(10,2) NULL,
+  -- Manually pins the "Más elegido" ribbon for this priced part — mirrors
+  -- wholesale_tiers.is_featured. Takes priority over the sales-data-derived
+  -- collections.most_chosen_tier_key pick.
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
   is_gift TINYINT(1) NOT NULL DEFAULT 0,
   sort_order INT NOT NULL DEFAULT 0,
   -- Only set for pricing_mode = 'combo': which combo tier (variant) this

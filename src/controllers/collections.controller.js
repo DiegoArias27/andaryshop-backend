@@ -144,11 +144,12 @@ async function replaceBundleParts(collectionId, parts) {
     !!part.isSpecific,
     part.requiredQty,
     part.price ?? null,
+    !!part.isFeatured,
     !!part.isGift,
     index,
   ])
   await pool.query(
-    'INSERT INTO collection_bundle_parts (collection_id, category_id, product_id, is_specific, required_qty, price, is_gift, sort_order) VALUES ?',
+    'INSERT INTO collection_bundle_parts (collection_id, category_id, product_id, is_specific, required_qty, price, is_featured, is_gift, sort_order) VALUES ?',
     [values]
   )
 }
