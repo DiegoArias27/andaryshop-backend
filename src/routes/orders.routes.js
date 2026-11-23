@@ -4,6 +4,8 @@ import {
   createPosSale,
   listOrders,
   getOrder,
+  getOrderByToken,
+  listMyOrders,
   updateOrder,
   updateOrderPhone,
   updateOrderPackaging,
@@ -11,7 +13,7 @@ import {
   cancelOrder,
   cancelConfirmedOrder,
 } from '../controllers/orders.controller.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { requireAdmin, requireCustomer } from '../middleware/auth.js'
 import { orderRateLimit } from '../middleware/rateLimit.js'
 
 const router = Router()
@@ -19,6 +21,14 @@ const router = Router()
 // Public — hit right when a customer clicks "Enviar pedido por WhatsApp",
 // guest or logged in.
 router.post('/', orderRateLimit, createOrder)
+// Public too — anyone holding the link (see createOrder's returned token)
+// can view that one order's status, no login needed. /:token has its own
+// path segment (/public/...) so it never collides with the admin-only
+// /:id route below.
+router.get('/public/:token', getOrderByToken)
+// A real path segment before /:id below — registered first so Express
+// never mistakes "mine" for an :id.
+router.get('/mine', requireCustomer, listMyOrders)
 
 router.post('/pos', requireAdmin, createPosSale)
 router.get('/', requireAdmin, listOrders)

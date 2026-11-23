@@ -460,6 +460,10 @@ CREATE TABLE IF NOT EXISTS media_library (
 -- nowhere, without ever having touched stock.
 CREATE TABLE IF NOT EXISTS orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  -- Lets a customer (guest or logged in) open this order's status from a
+  -- plain link without an account — see orders.controller.js's
+  -- getOrderByToken. Random and unguessable, never the sequential id.
+  public_token VARCHAR(40) NOT NULL,
   customer_id INT NULL,
   notes TEXT NULL,
   status ENUM('pending','confirmed','cancelled') NOT NULL DEFAULT 'pending',
@@ -688,6 +692,7 @@ CREATE INDEX idx_collection_bundle_parts_collection ON collection_bundle_parts(c
 CREATE INDEX idx_collection_bundle_parts_combo_tier ON collection_bundle_parts(combo_tier_id);
 CREATE INDEX idx_collection_combo_tiers_collection ON collection_combo_tiers(collection_id);
 CREATE INDEX idx_orders_status_created ON orders(status, created_at);
+CREATE UNIQUE INDEX idx_orders_public_token ON orders(public_token);
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_returns_order ON returns(order_id);
 CREATE INDEX idx_returns_order_item ON returns(order_item_id);

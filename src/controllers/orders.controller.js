@@ -1,8 +1,45 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcrypt'
+import { randomBytes } from 'crypto'
 import { pool } from '../config/db.js'
 import { env } from '../config/env.js'
 import { createNotification } from './notifications.controller.js'
+
+/** Random and unguessable (never the sequential order id) — this is the
+ * only thing standing between a public /pedido/:token link and letting
+ * anyone read anyone else's order by changing a number in the URL. */
+function generatePublicToken() {
+  return randomBytes(12).toString('hex')
+}
+
+/** Fields safe to hand back from a PUBLIC lookup (no auth at all) — strips
+ * customer_id, guest_phone and any joined customer name/phone, none of
+ * which the person holding the link needs or should be able to read. */
+function publicOrderFields(order) {
+  return {
+    id: order.id,
+    token: order.public_token,
+    status: order.status,
+    source: order.source,
+    discountAmount: Number(order.discount_amount),
+    paymentMethod: order.payment_method,
+    createdAt: order.created_at,
+    confirmedAt: order.confirmed_at,
+    items: order.items.map((i) => ({
+      productId: i.product_id,
+      name: i.product_name,
+      size: i.size,
+      colorName: i.color_name,
+      image: i.main_image_url,
+      unitPrice: Number(i.unit_price),
+      quantity: i.quantity,
+      discountAmount: Number(i.discount_amount),
+      isGift: !!i.is_gift,
+      isPreorder: !!i.is_preorder,
+    })),
+    total: orderRevenue(order),
+  }
+}
 
 /** Orders can be created by a guest or a logged-in customer — unlike
  * requireCustomer, a missing/invalid token here just means "guest", not a
@@ -60,9 +97,10 @@ export async function createOrder(req, res, next) {
       loyaltyDiscount = Number(customerRows[0]?.discount_amount ?? 0)
     }
 
+    const publicToken = generatePublicToken()
     const [orderResult] = await pool.query(
-      'INSERT INTO orders (customer_id, notes) VALUES (?, ?)',
-      [customerId, notes]
+      'INSERT INTO orders (customer_id, notes, public_token) VALUES (?, ?, ?)',
+      [customerId, notes, publicToken]
     )
     const orderId = orderResult.insertId
 
@@ -110,7 +148,40 @@ export async function createOrder(req, res, next) {
       body: `${itemCount} artículo(s) en el pedido #${orderId}.`,
     }).catch((err) => console.error('[orders] notification failed', err))
 
-    res.status(201).json({ id: orderId })
+    res.status(201).json({ id: orderId, token: publicToken })
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** Public — no auth at all, just the unguessable token. Lets the customer
+ * (guest or logged in) open their own order's status from the link the
+ * WhatsApp message/their account includes, without needing to sign in. */
+export async function getOrderByToken(req, res, next) {
+  try {
+    const { token } = req.params
+    const [rows] = await pool.query('SELECT * FROM orders WHERE public_token = ? LIMIT 1', [token])
+    if (rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' })
+    const [order] = await attachItems(rows)
+    res.json(publicOrderFields(order))
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** A logged-in customer's own order history (see Account.tsx's "Mis
+ * pedidos") — a guest order only shows up here once it was placed while
+ * actually logged in (createOrder stamps customer_id from the auth header
+ * at creation time); there's no way to retroactively claim a guest order
+ * after the fact. */
+export async function listMyOrders(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 100',
+      [req.customer.sub]
+    )
+    const orders = await attachItems(rows)
+    res.json(orders.map(publicOrderFields))
   } catch (err) {
     next(err)
   }
@@ -180,8 +251,8 @@ export async function createPosSale(req, res, next) {
     }
 
     const [orderResult] = await pool.query(
-      "INSERT INTO orders (customer_id, notes, status, source, discount_amount, payment_method, confirmed_at) VALUES (?, ?, 'confirmed', 'pos', ?, ?, NOW())",
-      [customerId, notes, discountAmount, paymentMethod]
+      "INSERT INTO orders (customer_id, notes, status, source, discount_amount, payment_method, confirmed_at, public_token) VALUES (?, ?, 'confirmed', 'pos', ?, ?, NOW(), ?)",
+      [customerId, notes, discountAmount, paymentMethod, generatePublicToken()]
     )
     const orderId = orderResult.insertId
 
