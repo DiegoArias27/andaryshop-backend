@@ -111,6 +111,9 @@ CREATE TABLE IF NOT EXISTS brands (
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   category_id INT NULL,
+  -- Playera-specific — the admin only shows this switch for that one
+  -- category. NULL for every other category's products.
+  neck_type ENUM('redondo', 'polo') NULL,
   brand_id INT NULL,
   name VARCHAR(180) NOT NULL,
   slug VARCHAR(200) NOT NULL UNIQUE,

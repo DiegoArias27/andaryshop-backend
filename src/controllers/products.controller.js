@@ -205,6 +205,7 @@ export async function createProduct(req, res, next) {
       price,
       brandId = null,
       categoryId = null,
+      neckType = null,
       mainImageUrl = null,
       isNew = false,
       isFeatured = false,
@@ -220,10 +221,11 @@ export async function createProduct(req, res, next) {
     const slug = await uniqueProductSlug(slugify(name))
 
     const [result] = await pool.query(
-      `INSERT INTO products (category_id, brand_id, name, slug, description, price, main_image_url, main_thumb_url, is_new, is_featured, discount_type, discount_value)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (category_id, neck_type, brand_id, name, slug, description, price, main_image_url, main_thumb_url, is_new, is_featured, discount_type, discount_value)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         categoryId,
+        neckType,
         brandId,
         name,
         slug,
@@ -272,6 +274,7 @@ export async function updateProduct(req, res, next) {
       price,
       brandId,
       categoryId,
+      neckType,
       mainImageUrl,
       isNew,
       isFeatured,
@@ -291,6 +294,7 @@ export async function updateProduct(req, res, next) {
     if (price !== undefined) { fields.push('price = ?'); params.push(price) }
     if (brandId !== undefined) { fields.push('brand_id = ?'); params.push(brandId) }
     if (categoryId !== undefined) { fields.push('category_id = ?'); params.push(categoryId) }
+    if (neckType !== undefined) { fields.push('neck_type = ?'); params.push(neckType) }
     if (mainImageUrl !== undefined) {
       fields.push('main_image_url = ?', 'main_thumb_url = ?')
       params.push(mainImageUrl, deriveThumbUrl(mainImageUrl))
