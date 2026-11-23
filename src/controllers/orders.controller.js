@@ -616,6 +616,11 @@ export async function confirmOrder(req, res, next) {
     if (orderRows[0].status !== 'pending') {
       return res.status(400).json({ error: 'Esta venta ya fue confirmada o cancelada' })
     }
+    // The old is_packaged checklist flag is gone — fulfillment_status now
+    // doubles as that same pre-confirm gate (see updateFulfillmentStatus).
+    if (!['packaging', 'delivered'].includes(orderRows[0].fulfillment_status)) {
+      return res.status(400).json({ error: 'Marca el pedido como "Empaquetando" antes de confirmar la venta' })
+    }
 
     const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [id])
     const withVariant = items.filter((i) => i.variant_id != null)
@@ -662,15 +667,19 @@ export async function confirmOrder(req, res, next) {
     // Only ever reached for a still-'pending' order, which (unlike a POS
     // sale, already 'confirmed' at creation) always started life at
     // fulfillment_status 'missing' — confirming it here means payment was
-    // just received, so this is also where that moves on to 'pending'.
+    // just received, so this is also where that moves on to 'pending'. But
+    // an admin can also advance fulfillment_status by hand before
+    // confirming (it's the pre-confirm packaging gate too, see
+    // updateFulfillmentStatus/Orders.tsx), so only bump it off 'missing' —
+    // never stomp a 'packaging'/'delivered' already picked.
     if (paymentMethod) {
       await pool.query(
-        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), payment_method = ?, fulfillment_status = 'pending' WHERE id = ?",
+        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), payment_method = ?, fulfillment_status = IF(fulfillment_status = 'missing', 'pending', fulfillment_status) WHERE id = ?",
         [paymentMethod, id]
       )
     } else {
       await pool.query(
-        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), fulfillment_status = 'pending' WHERE id = ?",
+        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), fulfillment_status = IF(fulfillment_status = 'missing', 'pending', fulfillment_status) WHERE id = ?",
         [id]
       )
     }
@@ -712,40 +721,15 @@ export async function updateOrderPhone(req, res, next) {
   }
 }
 
-/** A packaging checklist flag, not a workflow state — can be ticked (or
- * unticked) at any order status, independent of updateOrder's pending-only
- * gate. */
-export async function updateOrderPackaging(req, res, next) {
-  try {
-    const { id } = req.params
-    const { isPackaged } = req.body
-    const [result] = await pool.query(
-      'UPDATE orders SET is_packaged = ?, packed_at = ? WHERE id = ?',
-      [!!isPackaged, isPackaged ? new Date() : null, id]
-    )
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Order not found' })
-
-    const [rows] = await pool.query(
-      `SELECT o.*, c.name AS customer_name, c.phone AS customer_phone
-       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
-       WHERE o.id = ?`,
-      [id]
-    )
-    const [order] = await attachItems(rows)
-    res.json(order)
-  } catch (err) {
-    next(err)
-  }
-}
-
 const FULFILLMENT_STATUSES = ['missing', 'pending', 'packaging', 'delivered']
 
-/** Admin-only post-sale progress tracker for a WhatsApp order — pago
- * faltante → pedido pendiente → empaquetando → entregado. confirmOrder
- * below auto-advances 'missing' to 'pending' the moment a sale is
- * confirmed (confirming already means payment was received); 'packaging'
- * and 'delivered' are always a deliberate admin action from here, since
- * when those actually happen doesn't line up with any other event. */
+/** Admin-only progress tracker for a WhatsApp order — pago faltante →
+ * pedido pendiente → empaquetando → entregado. Also doubles as the
+ * pre-confirm packaging checklist: confirmOrder refuses to run until this
+ * is at least 'packaging'. confirmOrder auto-advances 'missing' to
+ * 'pending' the moment a sale is confirmed (confirming already means
+ * payment was received) without touching a 'packaging'/'delivered' already
+ * set by hand; 'delivered' is always a deliberate admin action from here. */
 export async function updateFulfillmentStatus(req, res, next) {
   try {
     const { id } = req.params

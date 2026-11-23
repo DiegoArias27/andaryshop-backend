@@ -508,15 +508,14 @@ CREATE TABLE IF NOT EXISTS orders (
   -- those) — separate from `payment_method`, which only gets set once the
   -- order is actually confirmed. Defaults to 'missing' the moment a
   -- WhatsApp order is created (see createOrder) since nothing's been paid
-  -- yet at that point; confirmOrder advances it to 'pending' automatically
-  -- (confirming already means payment was received) — 'packaging' and
-  -- 'delivered' after that are always a deliberate admin action.
+  -- yet at that point. Also doubles as the pre-confirm packaging checklist:
+  -- "Confirmar venta" is disabled until this reaches 'packaging', which an
+  -- admin can set by hand even before confirming. confirmOrder only
+  -- advances 'missing' to 'pending' (confirming already means payment was
+  -- received) and otherwise leaves whatever stage was already set alone, so
+  -- a pre-confirm 'packaging' pick isn't lost on confirm. 'delivered' is
+  -- always a separate, deliberate admin action after that.
   fulfillment_status ENUM('missing','pending','packaging','delivered') NULL,
-  -- Tracked separately from `status` — packaging happens after confirming
-  -- (or even while still pending), and isn't a state the order transitions
-  -- out of, just a checklist flag an admin ticks off.
-  is_packaged TINYINT(1) NOT NULL DEFAULT 0,
-  packed_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   confirmed_at TIMESTAMP NULL,
   CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
