@@ -20,6 +20,11 @@ function publicOrderFields(order) {
     id: order.id,
     token: order.public_token,
     status: order.status,
+    // The customer's own tracking page shows this (see OrderStatus.tsx) —
+    // more informative than just status's pending/confirmed/cancelled.
+    // Null for a POS sale, which a customer never opens this page for
+    // anyway.
+    fulfillmentStatus: order.fulfillment_status,
     source: order.source,
     discountAmount: Number(order.discount_amount),
     paymentMethod: order.payment_method,
