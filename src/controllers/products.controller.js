@@ -83,6 +83,13 @@ async function attachRelations(products) {
      ORDER BY c.sort_order ASC`,
     [productIds]
   )
+  const [tags] = await pool.query(
+    `SELECT pt.product_id, t.id, t.name, t.slug
+     FROM product_tags pt JOIN tags t ON t.id = pt.tag_id
+     WHERE pt.product_id IN (?)
+     ORDER BY t.name ASC`,
+    [productIds]
+  )
   const bestsellerIds = await getBestsellerProductIds()
 
   return products.map((product) => ({
@@ -93,6 +100,7 @@ async function attachRelations(products) {
     collections: collections
       .filter((c) => c.product_id === product.id)
       .map(({ product_id, discount_price, ...c }) => ({ ...c, discount_price })),
+    tags: tags.filter((t) => t.product_id === product.id).map(({ product_id, ...t }) => t),
   }))
 }
 
@@ -442,6 +450,29 @@ export async function deleteProductImage(req, res, next) {
     await deleteR2ObjectByUrl(existing[0].image_url)
 
     res.status(204).send()
+  } catch (err) {
+    next(err)
+  }
+}
+
+/** Replaces this product's full set of tags in one call (not additive) —
+ * simplest match for a chip-picker UI where every tag's on/off state is
+ * already known client-side; no need for separate add/remove endpoints. */
+export async function setProductTags(req, res, next) {
+  try {
+    const { id } = req.params
+    const { tagIds } = req.body
+    if (!Array.isArray(tagIds)) return res.status(400).json({ error: 'tagIds array is required' })
+
+    await pool.query('DELETE FROM product_tags WHERE product_id = ?', [id])
+    if (tagIds.length > 0) {
+      await pool.query('INSERT INTO product_tags (product_id, tag_id) VALUES ?', [tagIds.map((tagId) => [id, tagId])])
+    }
+
+    const [rows] = await pool.query(`${BASE_SELECT} WHERE p.id = ?`, [id])
+    if (rows.length === 0) return res.status(404).json({ error: 'Product not found' })
+    const [withRelations] = await attachRelations(rows)
+    res.json(withRelations)
   } catch (err) {
     next(err)
   }

@@ -5,10 +5,12 @@ import {
   listOrders,
   getOrder,
   getOrderByToken,
+  claimOrder,
   listMyOrders,
   updateOrder,
   updateOrderPhone,
   updateOrderPackaging,
+  updatePaymentStatus,
   confirmOrder,
   cancelOrder,
   cancelConfirmedOrder,
@@ -26,6 +28,9 @@ router.post('/', orderRateLimit, createOrder)
 // path segment (/public/...) so it never collides with the admin-only
 // /:id route below.
 router.get('/public/:token', getOrderByToken)
+// Logged in, but intentionally NOT requireAdmin — claiming only ever
+// touches the one order matching this exact token (see claimOrder).
+router.post('/public/:token/claim', requireCustomer, claimOrder)
 // A real path segment before /:id below — registered first so Express
 // never mistakes "mine" for an :id.
 router.get('/mine', requireCustomer, listMyOrders)
@@ -36,6 +41,7 @@ router.get('/:id', requireAdmin, getOrder)
 router.put('/:id', requireAdmin, updateOrder)
 router.patch('/:id/phone', requireAdmin, updateOrderPhone)
 router.patch('/:id/packaging', requireAdmin, updateOrderPackaging)
+router.patch('/:id/payment-status', requireAdmin, updatePaymentStatus)
 router.post('/:id/confirm', requireAdmin, confirmOrder)
 router.post('/:id/cancel', requireAdmin, cancelOrder)
 router.post('/:id/cancel-confirmed', requireAdmin, cancelConfirmedOrder)

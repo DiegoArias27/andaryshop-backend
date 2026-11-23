@@ -166,6 +166,26 @@ CREATE TABLE IF NOT EXISTS product_variants (
   UNIQUE KEY uq_product_size_color (product_id, size, color_name)
 ) ENGINE=InnoDB;
 
+-- A small, reusable catalog of free-form labels ("Oferta", "Edición
+-- limitada"...) the admin creates once and applies to any number of
+-- products — shown as a chip on the storefront (see ProductCard/
+-- ProductDetail). Independent of categories/brands, which are structural;
+-- a tag is just a descriptive flag.
+CREATE TABLE IF NOT EXISTS tags (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(60) NOT NULL,
+  slug VARCHAR(60) NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS product_tags (
+  product_id INT NOT NULL,
+  tag_id INT NOT NULL,
+  PRIMARY KEY (product_id, tag_id),
+  CONSTRAINT fk_product_tags_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  CONSTRAINT fk_product_tags_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Audit trail of stock adjustments made from the admin barcode scanner.
 CREATE TABLE IF NOT EXISTS stock_movements (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -483,6 +503,13 @@ CREATE TABLE IF NOT EXISTS orders (
   -- wa.me link only carries the shop's own number). NULL until someone adds
   -- it; independent of a logged-in customer's own `customers.phone`.
   guest_phone VARCHAR(30) NULL,
+  -- Admin-tracked payment follow-up for a WhatsApp order while it's still
+  -- pending (a POS sale is already paid at creation, so this stays NULL for
+  -- those) — separate from `payment_method`, which only gets set once the
+  -- order is actually confirmed. Defaults to 'missing' the moment a
+  -- WhatsApp order is created (see createOrder) since nothing's been paid
+  -- yet at that point.
+  payment_status ENUM('missing','partial','paid') NULL,
   -- Tracked separately from `status` — packaging happens after confirming
   -- (or even while still pending), and isn't a state the order transitions
   -- out of, just a checklist flag an admin ticks off.

@@ -5,6 +5,7 @@ import { env } from './config/env.js'
 import authRoutes from './routes/auth.routes.js'
 import customersRoutes from './routes/customers.routes.js'
 import categoriesRoutes from './routes/categories.routes.js'
+import tagsRoutes from './routes/tags.routes.js'
 import brandsRoutes from './routes/brands.routes.js'
 import productsRoutes from './routes/products.routes.js'
 import variantsRoutes from './routes/variants.routes.js'
@@ -63,6 +64,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/customers', customersRoutes)
 app.use('/api/categories', categoriesRoutes)
+app.use('/api/tags', tagsRoutes)
 app.use('/api/brands', brandsRoutes)
 app.use('/api/products', productsRoutes)
 app.use('/api/variants', variantsRoutes)

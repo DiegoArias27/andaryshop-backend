@@ -99,7 +99,7 @@ export async function createOrder(req, res, next) {
 
     const publicToken = generatePublicToken()
     const [orderResult] = await pool.query(
-      'INSERT INTO orders (customer_id, notes, public_token) VALUES (?, ?, ?)',
+      "INSERT INTO orders (customer_id, notes, public_token, payment_status) VALUES (?, ?, ?, 'missing')",
       [customerId, notes, publicToken]
     )
     const orderId = orderResult.insertId
@@ -169,11 +169,36 @@ export async function getOrderByToken(req, res, next) {
   }
 }
 
+/** Attaches a guest order to the now-logged-in customer holding its link —
+ * OrderStatus.tsx calls this right after a successful Google sign-in from
+ * the /pedido/:token page. Only ever claims an order that's still
+ * unowned (customer_id IS NULL); refuses outright if it already belongs to
+ * someone else, so holding the token alone can never hijack another
+ * customer's order. */
+export async function claimOrder(req, res, next) {
+  try {
+    const { token } = req.params
+    const [rows] = await pool.query('SELECT * FROM orders WHERE public_token = ? LIMIT 1', [token])
+    if (rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' })
+    const order = rows[0]
+    if (order.customer_id && order.customer_id !== req.customer.sub) {
+      return res.status(403).json({ error: 'Este pedido ya está asociado a otra cuenta' })
+    }
+    if (!order.customer_id) {
+      await pool.query('UPDATE orders SET customer_id = ? WHERE id = ?', [req.customer.sub, order.id])
+    }
+    const [updatedRows] = await pool.query('SELECT * FROM orders WHERE id = ?', [order.id])
+    const [full] = await attachItems(updatedRows)
+    res.json(publicOrderFields(full))
+  } catch (err) {
+    next(err)
+  }
+}
+
 /** A logged-in customer's own order history (see Account.tsx's "Mis
  * pedidos") — a guest order only shows up here once it was placed while
- * actually logged in (createOrder stamps customer_id from the auth header
- * at creation time); there's no way to retroactively claim a guest order
- * after the fact. */
+ * actually logged in, or claimed afterward from /pedido/:token (see
+ * claimOrder above). */
 export async function listMyOrders(req, res, next) {
   try {
     const [rows] = await pool.query(
@@ -686,6 +711,34 @@ export async function updateOrderPackaging(req, res, next) {
       'UPDATE orders SET is_packaged = ?, packed_at = ? WHERE id = ?',
       [!!isPackaged, isPackaged ? new Date() : null, id]
     )
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Order not found' })
+
+    const [rows] = await pool.query(
+      `SELECT o.*, c.name AS customer_name, c.phone AS customer_phone
+       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+       WHERE o.id = ?`,
+      [id]
+    )
+    const [order] = await attachItems(rows)
+    res.json(order)
+  } catch (err) {
+    next(err)
+  }
+}
+
+const PAYMENT_STATUSES = ['missing', 'partial', 'paid']
+
+/** Admin-only follow-up tracking for a pending WhatsApp order — "¿ya pagó?"
+ * while the seller is still chasing payment over chat, independent of
+ * `payment_method` (only set once the order is actually confirmed). */
+export async function updatePaymentStatus(req, res, next) {
+  try {
+    const { id } = req.params
+    const { paymentStatus } = req.body
+    if (!PAYMENT_STATUSES.includes(paymentStatus)) {
+      return res.status(400).json({ error: 'paymentStatus must be one of: ' + PAYMENT_STATUSES.join(', ') })
+    }
+    const [result] = await pool.query('UPDATE orders SET payment_status = ? WHERE id = ?', [paymentStatus, id])
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Order not found' })
 
     const [rows] = await pool.query(

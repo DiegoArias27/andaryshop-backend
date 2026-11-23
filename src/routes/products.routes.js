@@ -11,6 +11,7 @@ import {
   updateProductImage,
   reorderProductImages,
   deleteProductImage,
+  setProductTags,
   bulkUpdateDiscount,
 } from '../controllers/products.controller.js'
 import {
@@ -35,6 +36,7 @@ router.post('/:id/images', requireAdmin, addProductImages)
 router.put('/:id/images/reorder', requireAdmin, reorderProductImages)
 router.put('/images/:imageId', requireAdmin, updateProductImage)
 router.delete('/images/:imageId', requireAdmin, deleteProductImage)
+router.put('/:id/tags', requireAdmin, setProductTags)
 
 router.post('/:id/variants', requireAdmin, addVariant)
 router.put('/variants/:variantId', requireAdmin, updateVariant)
