@@ -10,7 +10,7 @@ import {
   updateOrder,
   updateOrderPhone,
   updateOrderPackaging,
-  updatePaymentStatus,
+  updateFulfillmentStatus,
   confirmOrder,
   cancelOrder,
   cancelConfirmedOrder,
@@ -41,7 +41,7 @@ router.get('/:id', requireAdmin, getOrder)
 router.put('/:id', requireAdmin, updateOrder)
 router.patch('/:id/phone', requireAdmin, updateOrderPhone)
 router.patch('/:id/packaging', requireAdmin, updateOrderPackaging)
-router.patch('/:id/payment-status', requireAdmin, updatePaymentStatus)
+router.patch('/:id/fulfillment-status', requireAdmin, updateFulfillmentStatus)
 router.post('/:id/confirm', requireAdmin, confirmOrder)
 router.post('/:id/cancel', requireAdmin, cancelOrder)
 router.post('/:id/cancel-confirmed', requireAdmin, cancelConfirmedOrder)

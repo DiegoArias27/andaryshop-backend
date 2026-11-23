@@ -503,13 +503,15 @@ CREATE TABLE IF NOT EXISTS orders (
   -- wa.me link only carries the shop's own number). NULL until someone adds
   -- it; independent of a logged-in customer's own `customers.phone`.
   guest_phone VARCHAR(30) NULL,
-  -- Admin-tracked payment follow-up for a WhatsApp order while it's still
-  -- pending (a POS sale is already paid at creation, so this stays NULL for
+  -- Admin-tracked fulfillment progress for a WhatsApp order (a POS sale is
+  -- already paid and handed over at creation, so this stays NULL for
   -- those) — separate from `payment_method`, which only gets set once the
   -- order is actually confirmed. Defaults to 'missing' the moment a
   -- WhatsApp order is created (see createOrder) since nothing's been paid
-  -- yet at that point.
-  payment_status ENUM('missing','partial','paid') NULL,
+  -- yet at that point; confirmOrder advances it to 'pending' automatically
+  -- (confirming already means payment was received) — 'packaging' and
+  -- 'delivered' after that are always a deliberate admin action.
+  fulfillment_status ENUM('missing','pending','packaging','delivered') NULL,
   -- Tracked separately from `status` — packaging happens after confirming
   -- (or even while still pending), and isn't a state the order transitions
   -- out of, just a checklist flag an admin ticks off.

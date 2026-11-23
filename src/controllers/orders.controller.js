@@ -99,7 +99,7 @@ export async function createOrder(req, res, next) {
 
     const publicToken = generatePublicToken()
     const [orderResult] = await pool.query(
-      "INSERT INTO orders (customer_id, notes, public_token, payment_status) VALUES (?, ?, ?, 'missing')",
+      "INSERT INTO orders (customer_id, notes, public_token, fulfillment_status) VALUES (?, ?, ?, 'missing')",
       [customerId, notes, publicToken]
     )
     const orderId = orderResult.insertId
@@ -654,13 +654,20 @@ export async function confirmOrder(req, res, next) {
       }
     }
 
+    // Only ever reached for a still-'pending' order, which (unlike a POS
+    // sale, already 'confirmed' at creation) always started life at
+    // fulfillment_status 'missing' — confirming it here means payment was
+    // just received, so this is also where that moves on to 'pending'.
     if (paymentMethod) {
-      await pool.query("UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), payment_method = ? WHERE id = ?", [
-        paymentMethod,
-        id,
-      ])
+      await pool.query(
+        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), payment_method = ?, fulfillment_status = 'pending' WHERE id = ?",
+        [paymentMethod, id]
+      )
     } else {
-      await pool.query("UPDATE orders SET status = 'confirmed', confirmed_at = NOW() WHERE id = ?", [id])
+      await pool.query(
+        "UPDATE orders SET status = 'confirmed', confirmed_at = NOW(), fulfillment_status = 'pending' WHERE id = ?",
+        [id]
+      )
     }
 
     const [rows] = await pool.query(
@@ -726,19 +733,22 @@ export async function updateOrderPackaging(req, res, next) {
   }
 }
 
-const PAYMENT_STATUSES = ['missing', 'partial', 'paid']
+const FULFILLMENT_STATUSES = ['missing', 'pending', 'packaging', 'delivered']
 
-/** Admin-only follow-up tracking for a pending WhatsApp order — "¿ya pagó?"
- * while the seller is still chasing payment over chat, independent of
- * `payment_method` (only set once the order is actually confirmed). */
-export async function updatePaymentStatus(req, res, next) {
+/** Admin-only post-sale progress tracker for a WhatsApp order — pago
+ * faltante → pedido pendiente → empaquetando → entregado. confirmOrder
+ * below auto-advances 'missing' to 'pending' the moment a sale is
+ * confirmed (confirming already means payment was received); 'packaging'
+ * and 'delivered' are always a deliberate admin action from here, since
+ * when those actually happen doesn't line up with any other event. */
+export async function updateFulfillmentStatus(req, res, next) {
   try {
     const { id } = req.params
-    const { paymentStatus } = req.body
-    if (!PAYMENT_STATUSES.includes(paymentStatus)) {
-      return res.status(400).json({ error: 'paymentStatus must be one of: ' + PAYMENT_STATUSES.join(', ') })
+    const { fulfillmentStatus } = req.body
+    if (!FULFILLMENT_STATUSES.includes(fulfillmentStatus)) {
+      return res.status(400).json({ error: 'fulfillmentStatus must be one of: ' + FULFILLMENT_STATUSES.join(', ') })
     }
-    const [result] = await pool.query('UPDATE orders SET payment_status = ? WHERE id = ?', [paymentStatus, id])
+    const [result] = await pool.query('UPDATE orders SET fulfillment_status = ? WHERE id = ?', [fulfillmentStatus, id])
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Order not found' })
 
     const [rows] = await pool.query(
